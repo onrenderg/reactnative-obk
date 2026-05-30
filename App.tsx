@@ -1,4 +1,4 @@
-import React, {useEffect, useRef, useState} from 'react';
+import React, {useEffect, useState} from 'react';
 import {
   Alert,
   NativeModules,
@@ -20,7 +20,6 @@ export default function App() {
   const [elapsed, setElapsed] = useState(0);
   const [saveDir, setSaveDir] = useState('');
   const [currentFile, setCurrentFile] = useState('');
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Get save directory on mount
   useEffect(() => {
@@ -29,26 +28,42 @@ export default function App() {
       .catch(() => {});
   }, []);
 
-  // Poll service status every second when running
+  // Ref to track previous service state — avoids stale-closure issues
+  const prevRunningRef = React.useRef(false);
+
+  // Always-on 1-second poll: reads the ACTUAL service state every second.
+  // Works whether state changed from on-screen button OR hardware volume key.
   useEffect(() => {
-    if (isRunning) {
-      timerRef.current = setInterval(async () => {
-        setElapsed(s => s + 1);
-        try {
-          const status = await CameraModule.getStatus();
-          setFrameCount(status.frameCount);
+    const id = setInterval(async () => {
+      try {
+        const status = await CameraModule.getStatus();
+        const running: boolean = !!status.isRunning;
+        const wasRunning = prevRunningRef.current;
+        prevRunningRef.current = running;
+
+        // Transition: idle → recording
+        if (!wasRunning && running) {
+          setIsRunning(true);
+          setElapsed(0);
+          setFrameCount(0);
+        }
+
+        // Transition: recording → idle
+        if (wasRunning && !running) {
+          setIsRunning(false);
+          setCurrentFile('');
+        }
+
+        // Update counters while recording
+        if (running) {
+          setElapsed(s => s + 1);
+          setFrameCount(status.frameCount ?? 0);
           if (status.currentFilePath) setCurrentFile(status.currentFilePath);
-        } catch {}
-      }, 1000);
-    } else {
-      if (timerRef.current) clearInterval(timerRef.current);
-      setElapsed(0);
-      setFrameCount(0);
-    }
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [isRunning]);
+        }
+      } catch {}
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);
 
   // ── Permissions ─────────────────────────────────────────────────────────────
   const requestPermissions = async (): Promise<boolean> => {
@@ -109,7 +124,7 @@ export default function App() {
         {/* Header */}
         <Text style={styles.title}>🎥 Background Camera</Text>
         <Text style={styles.subtitle}>
-          Records video even after screen-off
+          Vol ▲ = Start recording · Vol ▼ = Stop recording
         </Text>
 
         {/* Status */}
@@ -161,12 +176,16 @@ export default function App() {
         <View style={styles.infoCard}>
           <Text style={styles.infoTitle}>ℹ How it works</Text>
           <Text style={styles.infoText}>
-            Press Start → Camera2 opens + MediaRecorder starts recording .mp4
+            Press <Text style={styles.infoHighlight}>Volume UP</Text> → Camera2
+            opens + MediaRecorder starts recording .mp4
             {'\n'}
             Press Home or lock screen → Foreground Service keeps recording
             {'\n'}
-            Press Stop → recording saved, camera released
+            Press <Text style={styles.infoHighlight}>Volume DOWN</Text> →
+            recording saved, camera released
             {'\n\n'}
+            You can also use the on-screen buttons below.
+            {'\n'}
             Videos are saved as VID_YYYYMMDD_HHmmss.mp4
           </Text>
         </View>
@@ -280,6 +299,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   infoText: {color: '#7AAABB', fontSize: 12, lineHeight: 20},
+  infoHighlight: {color: '#5BA3D9', fontWeight: 'bold'},
 
   btn: {
     borderRadius: 14,
