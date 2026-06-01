@@ -30,9 +30,11 @@ class CameraForegroundService : Service() {
         const val TAG = "CameraForegroundService"
         const val CHANNEL_ID = "camera_bg_channel"
         const val NOTIFICATION_ID = 1001
+        const val ACTION_SWITCH = "ACTION_SWITCH"
         var isRunning = false
         var frameCount = 0
         var currentFilePath: String = ""
+        var useFrontCamera = true
     }
 
     private var cameraDevice: CameraDevice? = null
@@ -54,6 +56,15 @@ class CameraForegroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_SWITCH) {
+            if (isRunning) {
+                stopRecording()
+                stopCamera()
+                openCamera()
+            }
+            return START_STICKY
+        }
+
         startForeground(
             NOTIFICATION_ID,
             buildNotification(),
@@ -223,16 +234,19 @@ class CameraForegroundService : Service() {
         cameraDevice?.close(); cameraDevice = null
     }
 
-    /** Select back camera, fall back to front, then any available. */
+    /** Select preferred camera, fall back to other, then any available. */
     private fun selectCamera(): String? {
         val ids = cameraManager.cameraIdList
+        val target = if (useFrontCamera) CameraCharacteristics.LENS_FACING_FRONT else CameraCharacteristics.LENS_FACING_BACK
+        val fallback = if (useFrontCamera) CameraCharacteristics.LENS_FACING_BACK else CameraCharacteristics.LENS_FACING_FRONT
+
         ids.firstOrNull {
             cameraManager.getCameraCharacteristics(it)
-                .get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_BACK
+                .get(CameraCharacteristics.LENS_FACING) == target
         }?.let { return it }
         ids.firstOrNull {
             cameraManager.getCameraCharacteristics(it)
-                .get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_FRONT
+                .get(CameraCharacteristics.LENS_FACING) == fallback
         }?.let { return it }
         return ids.firstOrNull()
     }

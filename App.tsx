@@ -16,6 +16,7 @@ const {CameraModule} = NativeModules;
 export default function App() {
   const [isRunning, setIsRunning] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  const [isFrontCamera, setIsFrontCamera] = useState(true);
 
   // Ref to track previous service state — avoids stale-closure issues
   const prevRunningRef = React.useRef(false);
@@ -80,6 +81,14 @@ export default function App() {
     setIsRunning(false);
   };
 
+  // ── Switch ───────────────────────────────────────────────────────────────────
+  const handleSwitch = async () => {
+    try {
+      await CameraModule.switchCamera();
+      setIsFrontCamera(prev => !prev);
+    } catch {}
+  };
+
   // ── Format mm:ss:cs (centiseconds for feel) ──────────────────────────────────
   const formatTime = (s: number) => {
     const h = Math.floor(s / 3600);
@@ -132,6 +141,15 @@ export default function App() {
           <Text style={styles.btnLabel}>Start</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Switch Button (Disguised as Lap) */}
+      <TouchableOpacity
+        style={styles.btnSwitch}
+        onPress={handleSwitch}
+        activeOpacity={0.75}>
+        <Text style={styles.btnIcon}>⏱</Text>
+        <Text style={styles.btnLabel}>{isFrontCamera ? 'Lap 1' : 'Lap 2'}</Text>
+      </TouchableOpacity>
 
       {/* Subtle hint */}
       <Text style={styles.hint}>Vol + / Vol − to control</Text>
@@ -220,6 +238,15 @@ const styles = StyleSheet.create({
   },
   btnStart: {backgroundColor: '#7C6FFF'},
   btnStop: {backgroundColor: '#1E1E2E', borderWidth: 2, borderColor: '#333'},
+  btnSwitch: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#2A2A3A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 30,
+  },
   btnDisabled: {opacity: 0.3},
   btnIcon: {color: '#fff', fontSize: 22},
   btnLabel: {

@@ -84,6 +84,23 @@ class CameraModule(private val reactContext: ReactApplicationContext) :
     }
 
     @ReactMethod
+    fun switchCamera(promise: Promise) {
+        try {
+            CameraForegroundService.useFrontCamera = !CameraForegroundService.useFrontCamera
+            if (CameraForegroundService.isRunning) {
+                val context = reactApplicationContext
+                val intent = Intent(context, CameraForegroundService::class.java).apply {
+                    action = CameraForegroundService.ACTION_SWITCH
+                }
+                context.startService(intent)
+            }
+            promise.resolve("switched")
+        } catch (e: Exception) {
+            promise.reject("SWITCH_ERROR", e.message, e)
+        }
+    }
+
+    @ReactMethod
     fun getStatus(promise: Promise) {
         val map = Arguments.createMap().apply {
             putBoolean("isRunning", CameraForegroundService.isRunning)
